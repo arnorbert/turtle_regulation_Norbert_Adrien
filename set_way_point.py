@@ -1,47 +1,58 @@
+#!/usr/bin/env python
 import rospy
 from turtlesim.msg import Pose
-from std_msgs import String, Bool
 from geometry_msgs.msg import Twist
-from turtle_regulation_Norbert_Adrien.srv import setWaypointService, setWaypointServiceRequest
+#from turtle_regulation_Norbert_Adrien.srv import setWaypointService, setWaypointServiceRequest
 import math
+from math import atan2, atan
 
-turtle_pose = Pose()
+global waypoint
 
-kpl = 1.0
-
-distance_tolerance = 0.2
-
-def change_waypoint(request):
-	waypoint = request
-	return setWaypointServiceResponse(True)
+waypoint = Pose()
+waypoint = [7,7]
 
 def pose_callback(data):
-	global turtle_pose
-	turtle_pose = data
+	global turlePose
+	turtlePose = data
+
+def rotate(pub, rate, kp):
+	msg = Twist()
+	theta = angle()
+	error_angle = error(theta)
+	u = kp*error_angle
+	msg.angular.z = u
+	print("theta:", theta, "| u:",u, "| msg:", msg)
+
+	pub.publish(msg)
+	rate.sleep()
+
+def angle():
+	return atan2(waypoint[1] - turtlePose.y, waypoint[0] - turtlePose.x)
+
+def error(theta):
+	return atan(math.tan((theta - turtlePose.theta)/2))
 
 def main():
 	rospy.init_node('set_way_point')
 	rospy.Subscriber('/turtle1/pose', Pose, pose_callback)
-	cmd_vel_pub = rospy.Publisher('/turtle1/cmd_vel', Twist, queue_size = 10)
-
-	is_moving = Bool()
-	cmd_vel_msg = Twist()
-
-	is_moving.data = True
-
-	moving_pub = rospy.Publisher('is_moving', Bool, queue_size = 1)
-	srv = rospy.Service('set_waypoint_srv', setWaypointService, change_waypoint)
-
-	moving_pub.publish(is_moving)
-
-	global waypoint
-	waypoint = Pose()
-	waypoint.x = 7
-	waypoint.y = 7
-
-	err_lin = 0
-
+	global turtlePose
+	turtlePose = Pose()
+	pub = rospy.Publisher('/turtle1/cmd_vel', Twist, queue_size = 10)
+	rate = rospy.Rate(30)
+	kp = 1.0
+	msg = Twist()
 	while not rospy.is_shutdown():
-		if is_moving.data == True:
-			theta_desired = math.atan2(waypoint.y - turtle_pose.y, waypoint.x - tutle_pose.x)
-			eu_dist = math.sqrt(math.pow(waypoint.y - turtle_pose.y, 2) + math.pow(waypoint))
+		if turtlePose is not None:
+			theta_desired = math.atan2(waypoint[1] - turtlePose.y, waypoint[0]  - turtlePose.x)
+			theta = turtlePose.theta
+			e = math.atan(math.tan(theta_desired-theta))
+			u = kp * e
+			print(u)
+			msg.angular.z = u
+		pub.publish(msg)
+		#if turtlePose is not None:
+		#rotate(pub, rate, kp)
+
+
+if __name__ == '__main__':
+	main()
